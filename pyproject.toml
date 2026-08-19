@@ -43,8 +43,11 @@ api = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
 ]
+db = [
+    "psycopg[binary,pool]>=3.1",
+]
 all = [
-    "veriresearch[dev,llm,search,eval,tracing,api]",
+    "veriresearch[dev,llm,search,eval,tracing,api,db]",
 ]
 
 [tool.setuptools.packages.find]

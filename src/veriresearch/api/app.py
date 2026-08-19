@@ -7,50 +7,48 @@ re-derivation: it returns each evidence span's char offsets *and* the full
 span, straight out of the data model in `state.py` — nothing here recomputes
 or re-verifies anything.
 
-Run store is in-memory (a dict behind a lock), which is a real limitation:
-runs vanish on restart and this won't scale past one process. That's an
-intentional demo-scope simplification, not an oversight — swapping in a
-database or a job queue doesn't change anything about the graph, the
+Run persistence lives behind `RunStore` (see `store.py`): an in-memory dict by
+default (what every test uses), or a Postgres-backed store when `DATABASE_URL`
+is set. Swapping backends doesn't change anything about the graph, the
 verifier, or this API's shape.
 """
 
 from __future__ import annotations
 
-import threading
+import logging
+import os
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from ..graph import run as run_graph
-from ..state import RunState
+from ..store import RunRecord, build_run_store
+
+logger = logging.getLogger("veriresearch.api")
 
 app = FastAPI(title="VeriResearch API", version="0.1.0")
 
+_DEFAULT_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+_cors_env = os.getenv("CORS_ORIGINS", "")
+_allow_origins = [o.strip() for o in _cors_env.split(",") if o.strip()] or _DEFAULT_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_allow_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-_LOCK = threading.Lock()
-_RUNS: dict[str, "RunRecord"] = {}
+_STORE = build_run_store()
 
-
-@dataclass
-class RunRecord:
-    run_id: str
-    topic: str
-    mode: str
-    status: str = "queued"  # queued | running | done | error
-    state: Optional[RunState] = None
-    error: Optional[str] = None
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+# Cap on runs that are queued or actively running at once. Each run drives an
+# LLM-graph traversal (or, offline, still real CPU work), and this API has no
+# auth — an unbounded /runs endpoint on a public deploy is a resource
+# exhaustion vector. 429 past this cap rather than queueing unboundedly.
+_MAX_CONCURRENT_RUNS = int(os.getenv("MAX_CONCURRENT_RUNS", "5"))
 
 
 class CreateRunRequest(BaseModel):
@@ -64,23 +62,18 @@ class CreateRunResponse(BaseModel):
 
 
 def _execute(run_id: str) -> None:
-    with _LOCK:
-        record = _RUNS[run_id]
-        record.status = "running"
+    _STORE.mark_running(run_id)
+    record = _require_run(run_id)
     try:
         state = run_graph(record.topic, mode=record.mode, thread_id=run_id)
-        with _LOCK:
-            record.state = state
-            record.status = "done"
+        _STORE.mark_done(run_id, state)
     except Exception as exc:  # noqa: BLE001 — surfaced via GET /runs/{id}, not raised here
-        with _LOCK:
-            record.status = "error"
-            record.error = str(exc)
+        logger.exception("run %s failed", run_id)
+        _STORE.mark_error(run_id, str(exc))
 
 
 def _require_run(run_id: str) -> RunRecord:
-    with _LOCK:
-        record = _RUNS.get(run_id)
+    record = _STORE.get(run_id)
     if record is None:
         raise HTTPException(404, f"no such run: {run_id}")
     return record
@@ -92,18 +85,18 @@ def create_run(req: CreateRunRequest, background_tasks: BackgroundTasks) -> Crea
         raise HTTPException(400, "mode must be 'full' or 'baseline'")
     if not req.topic.strip():
         raise HTTPException(400, "topic must not be empty")
+    if _STORE.count_in_flight() >= _MAX_CONCURRENT_RUNS:
+        raise HTTPException(429, "too many runs in flight, try again shortly")
 
     run_id = f"run_{uuid.uuid4().hex[:12]}"
-    with _LOCK:
-        _RUNS[run_id] = RunRecord(run_id=run_id, topic=req.topic, mode=req.mode)
+    _STORE.create(run_id, req.topic, req.mode)
     background_tasks.add_task(_execute, run_id)
     return CreateRunResponse(run_id=run_id, status="queued")
 
 
 @app.get("/runs")
 def list_runs() -> list[dict[str, Any]]:
-    with _LOCK:
-        records = list(_RUNS.values())
+    records = _STORE.list()
     return [
         {"run_id": r.run_id, "topic": r.topic, "mode": r.mode, "status": r.status, "created_at": r.created_at}
         for r in sorted(records, key=lambda r: r.created_at, reverse=True)

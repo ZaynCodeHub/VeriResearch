@@ -1,0 +1,45 @@
+# Local production-parity check: same two images Railway will build, plus a
+# throwaway Postgres, wired together the same way. Not used by Railway itself
+# (Railway builds each Dockerfile directly) — this is for `docker compose up`
+# on your machine before you deploy.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: veriresearch
+      POSTGRES_PASSWORD: veriresearch
+      POSTGRES_DB: veriresearch
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U veriresearch"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://veriresearch:veriresearch@db:5432/veriresearch
+      CORS_ORIGINS: http://localhost:8080
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: http://localhost:8000
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
