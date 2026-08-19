@@ -1,8 +1,41 @@
 # Deploying VeriResearch
 
 This deploys two services (backend API, frontend static site) plus a managed
-Postgres database, on Railway. Everything below is manual dashboard/CLI work
-— I can't create the account or bind a payment method for you.
+Postgres database, on Railway.
+
+## Current deployment
+
+- Frontend: https://veriresearch-frontend-production.up.railway.app
+- Backend: https://veriresearch-backend-production.up.railway.app (`/health`)
+- Project: "veriresearch" in Zayn's Railway workspace, three services
+  (`veriresearch-backend`, `veriresearch-frontend`, `Postgres`) in the
+  `production` environment.
+- Both app services are connected to `ZaynCodeHub/VeriResearch` on `main` —
+  pushing to `main` triggers a new build and deploy automatically for
+  whichever service's files changed.
+
+### Operating notes
+
+- **`railway redeploy` replays the previous deployment's build config
+  verbatim** — it does not re-read current service settings (root directory,
+  Dockerfile path, etc.). If you change a build-affecting setting, it only
+  takes effect on the *next* build triggered by an actual GitHub push (or
+  `railway up`), not on a `redeploy` of the old one. Learned this the hard
+  way getting the frontend's root directory pointed at `frontend/` — the fix
+  didn't show up until an actual push.
+- `VITE_API_BASE` is baked into the frontend at **build** time. If the
+  backend's URL ever changes, update that variable and push (or `railway up`)
+  to rebuild — restarting the running frontend container won't pick it up.
+- Useful commands from the repo root (Railway CLI, already linked to this
+  project): `railway status --json`, `railway logs --service <name>`,
+  `railway variable list --service <name> --kv`, `railway domain --service <name>`.
+
+## Setting this up from scratch (reference)
+
+The above is already done. This section is for redoing it — a new
+environment, a fork, or if the project ever needs to be recreated. Everything
+below is manual dashboard/CLI work either way — I can't create an account or
+bind a payment method for you.
 
 The app ships defaulting to **offline/demo mode**: no `GROK_API_KEY` or
 `TAVILY_API_KEY` needed, deterministic output from the bundled local corpus
@@ -94,6 +127,6 @@ unless you ask for it next:
 - **Structured logging/metrics/alerting** — you get Railway's basic
   logs/metrics dashboard, nothing beyond that.
 - **Autoscaling / multi-region** — single instance per service.
-- **CD** (auto-deploy on push) — Railway's GitHub integration does this by
-  default once connected in step 3/4; GitHub Actions (`.github/workflows/ci.yml`)
-  only *tests*, it doesn't deploy.
+- Note on CD: GitHub push-to-deploy *is* wired up (see "Current deployment"
+  above). `.github/workflows/ci.yml` only *tests* — it's a separate thing,
+  not what triggers the Railway deploys.
