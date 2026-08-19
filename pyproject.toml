@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "veriresearch"
+version = "0.1.0"
+description = "Multi-agent research system where every claim is independently verified against its source."
+requires-python = ">=3.10"
+readme = "README.md"
+dependencies = [
+    "pydantic>=2.6",
+    "typing_extensions>=4.10",
+    "langgraph>=0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+llm = [
+    "openai>=1.0",
+]
+search = [
+    "tavily-python>=0.5",
+]
+nli = [
+    "transformers>=4.40",
+    "torch>=2.2",
+]
+eval = [
+    "ragas>=0.2",
+    "langchain-xai>=1.0",
+    "langchain-huggingface>=0.1",
+    "sentence-transformers>=3.0",
+    "matplotlib>=3.8",
+    "datasets>=2.19",
+]
+tracing = [
+    "langfuse>=2.40",
+]
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+]
+all = [
+    "veriresearch[dev,llm,search,eval,tracing,api]",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
