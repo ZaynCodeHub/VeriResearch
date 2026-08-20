@@ -29,6 +29,15 @@ Postgres database, on Railway.
 - Useful commands from the repo root (Railway CLI, already linked to this
   project): `railway status --json`, `railway logs --service <name>`,
   `railway variable list --service <name> --kv`, `railway domain --service <name>`.
+- **If GitHub push-to-deploy stops firing** (dashboard shows a "⚠ GitHub
+  repo access needed" warning on a service, or pushes just don't trigger a
+  build): clicking the dashboard's own "Reconnect" button was *not* enough
+  here — it re-authorized the GitHub App but the service's existing webhook
+  registration stayed stale. What fixed it: `railway service source
+  disconnect --service <name>` then `railway service source connect --repo
+  ZaynCodeHub/VeriResearch --branch main --service <name>` again, which
+  forces a clean webhook. Service-level settings (root directory, Dockerfile
+  path, variables) survive this — only the source link is touched.
 
 ## Setting this up from scratch (reference)
 
