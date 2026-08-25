@@ -1,9 +1,8 @@
-# Backend API image. Builds the veriresearch package with only the extras a
-# deployed API needs (api + db) — llm/search/nli/eval deps are lazily
-# imported by the code only when their API keys are set, so they're left out
-# here to keep the image small; add them to the pip install below if you turn
-# on live mode (GROK_API_KEY / TAVILY_API_KEY) and want them baked in rather
-# than installed at runtime.
+# Backend API image. Builds the veriresearch package with the extras the
+# deployed API needs: api + db always, plus llm + search since this
+# deployment runs in live mode (GROK_API_KEY / TAVILY_API_KEY set) — openai
+# and tavily-python are lazily imported by the code only when those keys are
+# set, but they still need to be installed at build time here.
 FROM python:3.12-slim AS base
 
 WORKDIR /app
@@ -17,10 +16,11 @@ RUN apt-get update \
 COPY pyproject.toml README.md ./
 COPY src ./src
 
-RUN pip install --no-cache-dir ".[api,db]"
+RUN pip install --no-cache-dir ".[api,db,llm,search]"
 
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 
 # Railway injects $PORT; default to 8000 for `docker run` outside Railway.
 CMD ["sh", "-c", "uvicorn veriresearch.api.app:app --host 0.0.0.0 --port ${PORT:-8000}"]
+
