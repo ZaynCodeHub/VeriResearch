@@ -13,6 +13,23 @@ function StatusBadge({ status }) {
   return <span className={`status-badge status-${status}`}>{status}</span>
 }
 
+function formatElapsed(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`
+}
+
+function ElapsedTimer({ status, elapsedMs }) {
+  if (elapsedMs == null) return null
+  const verb = status === 'done' ? 'completed in' : status === 'error' ? 'failed after' : 'running for'
+  return (
+    <span className="elapsed-timer">
+      {verb} {formatElapsed(elapsedMs)}
+    </span>
+  )
+}
+
 function ClaimRow({ claim, selected, onClick }) {
   return (
     <li
@@ -94,13 +111,17 @@ export default function App() {
   const [selectedClaimId, setSelectedClaimId] = useState(null)
   const [claimDetail, setClaimDetail] = useState(null)
   const [error, setError] = useState(null)
+  const [startedAt, setStartedAt] = useState(null)
+  const [elapsedMs, setElapsedMs] = useState(null)
   const pollRef = useRef(null)
+  const tickRef = useRef(null)
 
   async function startRun() {
     setError(null)
     setRun(null)
     setSelectedClaimId(null)
     setClaimDetail(null)
+    setElapsedMs(null)
     try {
       const res = await fetch(`${API_BASE}/runs`, {
         method: 'POST',
@@ -109,6 +130,7 @@ export default function App() {
       })
       if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
       const data = await res.json()
+      setStartedAt(Date.now())
       setRunId(data.run_id)
     } catch (e) {
       setError(String(e))
@@ -130,9 +152,19 @@ export default function App() {
         setError(String(e))
         clearInterval(pollRef.current)
       }
-    }, 500)
+    }, 1500)
     return () => clearInterval(pollRef.current)
   }, [runId])
+
+  useEffect(() => {
+    if (!startedAt) return
+    clearInterval(tickRef.current)
+    const isSettled = run?.status === 'done' || run?.status === 'error'
+    setElapsedMs(Date.now() - startedAt)
+    if (isSettled) return
+    tickRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000)
+    return () => clearInterval(tickRef.current)
+  }, [startedAt, run?.status])
 
   async function selectClaim(claimId) {
     setSelectedClaimId(claimId)
@@ -151,6 +183,8 @@ export default function App() {
     sections[c.section || 'Report'].push(c)
   }
 
+  const isBusy = run && (run.status === 'queued' || run.status === 'running')
+
   return (
     <div className="app">
       <header>
@@ -158,20 +192,39 @@ export default function App() {
         <p className="tagline">Every claim, independently verified against its source.</p>
       </header>
 
-      <div className="controls">
-        <input
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          placeholder="Research topic..."
-        />
-        <select value={mode} onChange={(e) => setMode(e.target.value)}>
-          <option value="full">full (verifier enforces)</option>
-          <option value="baseline">baseline (measure only)</option>
-        </select>
-        <button onClick={startRun} disabled={run && (run.status === 'queued' || run.status === 'running')}>
-          Run
-        </button>
-        {run && <StatusBadge status={run.status} />}
+      <div className="controls-card">
+        <div className="controls">
+          <label className="field">
+            <span className="field-label">Research topic</span>
+            <input
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="e.g. the James Webb Space Telescope"
+            />
+          </label>
+          <label className="field field-mode">
+            <span className="field-label">Mode</span>
+            <select value={mode} onChange={(e) => setMode(e.target.value)}>
+              <option value="full">full (verifier enforces)</option>
+              <option value="baseline">baseline (measure only)</option>
+            </select>
+          </label>
+          <button className="run-btn" onClick={startRun} disabled={isBusy}>
+            {isBusy ? 'Running…' : 'Run'}
+          </button>
+        </div>
+
+        {run && (
+          <div className="run-status-row">
+            <StatusBadge status={run.status} />
+            <ElapsedTimer status={run.status} elapsedMs={elapsedMs} />
+            {isBusy && (
+              <span className="muted status-hint">
+                Live research (real search + verification) typically takes 1–3 minutes.
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {error && <div className="error-banner">{error}</div>}
