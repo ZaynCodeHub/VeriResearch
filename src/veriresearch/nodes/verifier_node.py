@@ -137,7 +137,7 @@ def finalize_node(state: RunState) -> dict[str, Any]:
     citation_numbers: dict[str, int] = {}
     references: list[Reference] = []
 
-    def _cite(source_ids: list[str]) -> str:
+    def _cite_numbers(source_ids: list[str]) -> list[int]:
         numbers = []
         for sid in source_ids:
             if sid not in citation_numbers:
@@ -152,26 +152,54 @@ def finalize_node(state: RunState) -> dict[str, Any]:
                     )
                 )
             numbers.append(citation_numbers[sid])
-        return f" [{','.join(str(n) for n in numbers)}]" if numbers else ""
+        return numbers
 
     lines = [f"# {topic}\n"]
     report_sections: list[ReportSection] = []
+    # Sub-questions frequently retrieve overlapping content (often the exact
+    # same sentence), so the paragraph view below dedupes on claim text —
+    # merging citation numbers into one bracket — while the per-section
+    # bullets stay one-per-claim, since each sub-question's own breakdown is
+    # still meant to be complete on its own.
+    summary_order: list[str] = []
+    summary_seen: dict[str, dict[str, Any]] = {}
     for heading, claim_list in sections.items():
         lines.append(f"## {heading}\n")
         prose_lines = []
         for claim in claim_list:
             marker = " ⚠️" if claim.id in flagged else ""
-            cite = _cite(claim.source_ids)
-            line = f"- {claim.text}{marker}{cite}"
-            lines.append(line)
-            prose_lines.append(line)
+            numbers = _cite_numbers(claim.source_ids)
+            cite = f" [{','.join(str(n) for n in numbers)}]" if numbers else ""
+            sentence = f"{claim.text}{marker}{cite}"
+            lines.append(f"- {sentence}")
+            prose_lines.append(f"- {sentence}")
+
+            entry = summary_seen.get(claim.text)
+            if entry is None:
+                entry = {"flagged": False, "numbers": []}
+                summary_seen[claim.text] = entry
+                summary_order.append(claim.text)
+            entry["flagged"] = entry["flagged"] or bool(marker)
+            for n in numbers:
+                if n not in entry["numbers"]:
+                    entry["numbers"].append(n)
         report_sections.append(
             ReportSection(heading=heading, claim_ids=[c.id for c in claim_list], prose="\n".join(prose_lines))
         )
         lines.append("")
 
+    summary_sentences = []
+    for text in summary_order:
+        entry = summary_seen[text]
+        marker = " ⚠️" if entry["flagged"] else ""
+        cite = f" [{','.join(str(n) for n in entry['numbers'])}]" if entry["numbers"] else ""
+        summary_sentences.append(f"{text}{marker}{cite}")
+    summary = " ".join(summary_sentences)
+
     if not sections:
         lines.append("_No claims could be verified sufficiently to publish._\n")
+    else:
+        lines.insert(1, f"{summary}\n")
 
     if references:
         lines.append("## Sources\n")
@@ -182,6 +210,7 @@ def finalize_node(state: RunState) -> dict[str, Any]:
     report = Report(
         topic=topic,
         title=f"Report: {topic}",
+        summary=summary,
         sections=report_sections,
         markdown="\n".join(lines),
         references=references,

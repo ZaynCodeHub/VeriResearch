@@ -59,6 +59,23 @@ function parseProseLine(raw) {
   return { text, citation, flagged }
 }
 
+function renderCitedText(text) {
+  return text.split(/(\[[0-9]+(?:,[0-9]+)*\])/g).map((part, i) =>
+    /^\[[0-9,]+\]$/.test(part) ? (
+      <sup key={i} className="answer-cite">
+        {part}
+      </sup>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  )
+}
+
+function AnswerSummary({ summary }) {
+  if (!summary) return null
+  return <p className="answer-summary">{renderCitedText(summary)}</p>
+}
+
 function AnswerSection({ heading, prose }) {
   const lines = (prose || '').split('\n').filter(Boolean)
   if (lines.length === 0) return null
@@ -306,13 +323,14 @@ export default function App() {
               {run.report.dropped_claim_ids.length} dropped, {run.report.flagged_claim_ids.length} flagged
             </span>
           )}
-          <span className="muted">judge: {run.verification_summary.backend}</span>
         </div>
       )}
 
       {run?.report && run.report.sections.length > 0 && (
         <div className="answer-card">
           <h2 className="answer-title">Answer</h2>
+          <AnswerSummary summary={run.report.summary} />
+          <h3 className="answer-detail-heading">By sub-question</h3>
           {run.report.sections.map((s) => (
             <AnswerSection key={s.heading} heading={s.heading} prose={s.prose} />
           ))}

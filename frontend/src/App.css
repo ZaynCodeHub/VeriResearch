@@ -220,6 +220,24 @@ header h1 {
   border-bottom: 1px solid var(--border);
 }
 
+.answer-summary {
+  margin: 0 0 20px;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+.answer-detail-heading {
+  margin: 0 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-muted);
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
 .answer-section {
   margin-bottom: 18px;
 }

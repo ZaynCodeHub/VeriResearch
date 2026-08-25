@@ -221,6 +221,7 @@ class Reference(BaseModel):
 class Report(BaseModel):
     topic: str
     title: str = ""
+    summary: str = ""  # every published claim's text, joined into one paragraph answering `topic`
     sections: list[ReportSection] = Field(default_factory=list)
     markdown: str = ""
     references: list[Reference] = Field(default_factory=list)

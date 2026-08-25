@@ -124,6 +124,7 @@ def get_run(run_id: str) -> dict[str, Any]:
     if report is not None:
         payload["report"] = {
             "title": report.title,
+            "summary": report.summary,
             "markdown": report.markdown,
             "sections": [
                 {"heading": s.heading, "claim_ids": s.claim_ids, "prose": s.prose} for s in report.sections
