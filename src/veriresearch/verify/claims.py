@@ -5,6 +5,15 @@ Convention: the Writer cites inline as it drafts, `... sentence text. [[src_id]]
 still becomes a Claim — with empty evidence — so it verifies to UNSUPPORTED
 rather than silently disappearing. An uncited claim is exactly the failure
 mode this system exists to catch, not one to hide by skipping extraction.
+
+The marker is expected after the sentence's closing punctuation (see the
+prompt in `nodes/writer.py`), but an LLM writer will sometimes place it
+before its own period instead — `... sentence text [[src_id]].` — so
+`_CITATION` also matches that form and folds the trailing punctuation back
+onto the claim text rather than discarding it. Without this, every
+LLM-drafted claim in a run gets zero evidence and the whole report comes
+back 0% supported regardless of how good the underlying research was (see
+`test_citation_before_trailing_punctuation`).
 """
 
 from __future__ import annotations
@@ -14,7 +23,7 @@ import re
 from ..state import Claim, EvidenceSpan, Source
 
 _SENT_SPLIT = re.compile(r"(?<=[.!?])\s+(?!\[\[)|(?<=\]\])\s+")
-_CITATION = re.compile(r"\[\[([^\]]+)\]\]\s*$")
+_CITATION = re.compile(r"\[\[([^\]]+)\]\](?P<punct>[.!?])?\s*$")
 
 
 def _candidate_evidence(source: Source) -> EvidenceSpan:
@@ -54,7 +63,7 @@ def extract_claims(
             text = sentence
             if match:
                 cited_ids = [s.strip() for s in match.group(1).split(",") if s.strip()]
-                text = sentence[: match.start()].strip()
+                text = sentence[: match.start()].strip() + (match.group("punct") or "")
             if not text:
                 continue
 

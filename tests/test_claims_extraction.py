@@ -40,3 +40,16 @@ def test_citation_marker_survives_sentence_splitting():
     claims = extract_claims(draft, {SOURCE.id: SOURCE})
     assert len(claims) == 2
     assert all(c.source_ids == ["src_a"] for c in claims)
+
+
+def test_citation_before_trailing_punctuation():
+    """Regression: the real LLM writer places the marker before the sentence's
+    own closing punctuation ("... text [[src_id]].") rather than after it
+    ("... text. [[src_id]]"). Before this fix, `_CITATION`'s end-of-string
+    anchor missed this form entirely, so every LLM-drafted claim got zero
+    evidence and the run came back 0% supported regardless of the research."""
+    draft = "## Section\n\nThe tower is 330 meters tall [[src_a]].\n"
+    claims = extract_claims(draft, {SOURCE.id: SOURCE})
+    assert len(claims) == 1
+    assert claims[0].text == "The tower is 330 meters tall."
+    assert claims[0].source_ids == ["src_a"]

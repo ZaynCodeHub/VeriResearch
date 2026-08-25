@@ -144,8 +144,12 @@ def _llm_draft(
         "a markdown report with one '## <sub-question>' heading per sub-question below it. "
         "Every sentence that states a fact MUST end with an inline citation marker in the "
         "form [[source_id]] (comma-separate multiple ids: [[src_a,src_b]]), copied exactly "
-        "from the source ids given. Do not state anything not present in the excerpts. If a "
-        "sub-question has no sources, write one sentence saying so, with no citation marker."
+        "from the source ids given. The citation marker MUST come AFTER the sentence's own "
+        "closing punctuation (period, question mark, or exclamation point), never before it. "
+        "Correct: \"The tower is 330 meters tall. [[source_id]]\" Incorrect: \"The tower is "
+        "330 meters tall [[source_id]].\" Do not state anything not present in the excerpts. "
+        "If a sub-question has no sources, write one sentence saying so, with no citation "
+        "marker."
     )
 
     blocks = [f"TOPIC: {topic}\n"]
