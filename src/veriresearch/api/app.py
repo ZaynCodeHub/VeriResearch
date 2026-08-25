@@ -125,7 +125,13 @@ def get_run(run_id: str) -> dict[str, Any]:
         payload["report"] = {
             "title": report.title,
             "markdown": report.markdown,
-            "sections": [{"heading": s.heading, "claim_ids": s.claim_ids} for s in report.sections],
+            "sections": [
+                {"heading": s.heading, "claim_ids": s.claim_ids, "prose": s.prose} for s in report.sections
+            ],
+            "references": [
+                {"number": r.number, "source_id": r.source_id, "title": r.title, "url": r.url}
+                for r in report.references
+            ],
             "dropped_claim_ids": report.dropped_claim_ids,
             "flagged_claim_ids": report.flagged_claim_ids,
         }

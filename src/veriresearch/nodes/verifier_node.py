@@ -20,7 +20,7 @@ import time
 from typing import Any, Optional
 
 from ..config import SETTINGS
-from ..state import Claim, Replace, Report, ReportSection, RunState, VerificationLabel
+from ..state import Claim, Reference, Replace, Report, ReportSection, RunState, VerificationLabel
 from ..verify.verifier import Verifier
 
 
@@ -114,6 +114,7 @@ def finalize_node(state: RunState) -> dict[str, Any]:
     topic = state.get("topic", "")
     mode = state.get("mode", "full")
     enforce = mode != "baseline"
+    sources = state.get("sources", {})
 
     claims = sorted(state.get("claims", {}).values(), key=lambda c: (c.section, c.order))
     sections: dict[str, list[Claim]] = {}
@@ -129,6 +130,30 @@ def finalize_node(state: RunState) -> dict[str, Any]:
             flagged.append(claim.id)
         sections.setdefault(claim.section or "Report", []).append(claim)
 
+    # Number each distinct source in order of first appearance across the
+    # published report, so the reader sees "[1]" the first time a source is
+    # cited rather than an opaque id like "src_26fac6fa5c" — readable
+    # citations are the whole point of this pass (see `Reference` docstring).
+    citation_numbers: dict[str, int] = {}
+    references: list[Reference] = []
+
+    def _cite(source_ids: list[str]) -> str:
+        numbers = []
+        for sid in source_ids:
+            if sid not in citation_numbers:
+                citation_numbers[sid] = len(citation_numbers) + 1
+                source = sources.get(sid)
+                references.append(
+                    Reference(
+                        number=citation_numbers[sid],
+                        source_id=sid,
+                        title=(source.title if source and source.title else "") or (source.url if source else sid),
+                        url=source.url if source else "",
+                    )
+                )
+            numbers.append(citation_numbers[sid])
+        return f" [{','.join(str(n) for n in numbers)}]" if numbers else ""
+
     lines = [f"# {topic}\n"]
     report_sections: list[ReportSection] = []
     for heading, claim_list in sections.items():
@@ -136,8 +161,7 @@ def finalize_node(state: RunState) -> dict[str, Any]:
         prose_lines = []
         for claim in claim_list:
             marker = " ⚠️" if claim.id in flagged else ""
-            source_ids = claim.source_ids
-            cite = f" ({', '.join(source_ids)})" if source_ids else ""
+            cite = _cite(claim.source_ids)
             line = f"- {claim.text}{marker}{cite}"
             lines.append(line)
             prose_lines.append(line)
@@ -149,11 +173,18 @@ def finalize_node(state: RunState) -> dict[str, Any]:
     if not sections:
         lines.append("_No claims could be verified sufficiently to publish._\n")
 
+    if references:
+        lines.append("## Sources\n")
+        for ref in references:
+            lines.append(f"[{ref.number}] {ref.title}" + (f" — {ref.url}" if ref.url else ""))
+        lines.append("")
+
     report = Report(
         topic=topic,
         title=f"Report: {topic}",
         sections=report_sections,
         markdown="\n".join(lines),
+        references=references,
         dropped_claim_ids=dropped,
         flagged_claim_ids=flagged,
     )

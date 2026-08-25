@@ -43,6 +43,71 @@ function ClaimRow({ claim, selected, onClick }) {
   )
 }
 
+function parseProseLine(raw) {
+  let text = raw.replace(/^- /, '')
+  let citation = null
+  const citeMatch = text.match(/\s\[([0-9,]+)\]$/)
+  if (citeMatch) {
+    citation = citeMatch[1].split(',')
+    text = text.slice(0, citeMatch.index)
+  }
+  let flagged = false
+  if (text.endsWith(' ⚠️')) {
+    flagged = true
+    text = text.slice(0, -'⚠️'.length).trimEnd()
+  }
+  return { text, citation, flagged }
+}
+
+function AnswerSection({ heading, prose }) {
+  const lines = (prose || '').split('\n').filter(Boolean)
+  if (lines.length === 0) return null
+  return (
+    <div className="answer-section">
+      <h3>{heading}</h3>
+      <ul className="answer-list">
+        {lines.map((raw, i) => {
+          const { text, citation, flagged } = parseProseLine(raw)
+          return (
+            <li key={i}>
+              {text}
+              {flagged && (
+                <span className="answer-flag" title="Partially supported by its source">
+                  {' '}
+                  ⚠️
+                </span>
+              )}
+              {citation && <sup className="answer-cite">[{citation.join(',')}]</sup>}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+function SourcesList({ references }) {
+  if (!references || references.length === 0) return null
+  return (
+    <div className="sources-list">
+      <h3>Sources</h3>
+      <ol>
+        {references.map((r) => (
+          <li key={r.number} value={r.number}>
+            {r.url ? (
+              <a href={r.url} target="_blank" rel="noreferrer">
+                {r.title}
+              </a>
+            ) : (
+              r.title
+            )}
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
 function EvidencePanel({ detail, onClose }) {
   if (!detail) return null
   return (
@@ -245,8 +310,19 @@ export default function App() {
         </div>
       )}
 
+      {run?.report && run.report.sections.length > 0 && (
+        <div className="answer-card">
+          <h2 className="answer-title">Answer</h2>
+          {run.report.sections.map((s) => (
+            <AnswerSection key={s.heading} heading={s.heading} prose={s.prose} />
+          ))}
+          <SourcesList references={run.report.references} />
+        </div>
+      )}
+
       <div className="main-layout">
         <div className="report-column">
+          {claims.length > 0 && <h2 className="section-supertitle">Claim-by-claim verification</h2>}
           {Object.entries(sections).map(([heading, sectionClaims]) => (
             <div key={heading} className="section">
               <h2>{heading}</h2>

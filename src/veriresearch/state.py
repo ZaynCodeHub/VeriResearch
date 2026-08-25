@@ -203,11 +203,27 @@ class ReportSection(BaseModel):
     prose: str = ""
 
 
+class Reference(BaseModel):
+    """One entry in the report's numbered source list.
+
+    `number` is assigned in order of first appearance across the published
+    report (not the order sources were retrieved), so `[1]` in the text is
+    always the first reference listed — the same convention a reader expects
+    from a paper's numbered citations.
+    """
+
+    number: int
+    source_id: str
+    title: str = ""
+    url: str = ""
+
+
 class Report(BaseModel):
     topic: str
     title: str = ""
     sections: list[ReportSection] = Field(default_factory=list)
     markdown: str = ""
+    references: list[Reference] = Field(default_factory=list)
     dropped_claim_ids: list[str] = Field(default_factory=list)
     flagged_claim_ids: list[str] = Field(default_factory=list)
 

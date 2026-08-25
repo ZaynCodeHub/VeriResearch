@@ -201,6 +201,102 @@ header h1 {
   color: var(--ink-muted);
 }
 
+.answer-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 22px 26px;
+  margin-bottom: 22px;
+  box-shadow: 0 1px 2px rgba(20, 20, 15, 0.03);
+}
+
+.answer-title {
+  margin: 0 0 16px;
+  font-family: Georgia, Cambria, 'Times New Roman', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.answer-section {
+  margin-bottom: 18px;
+}
+.answer-section:last-of-type {
+  margin-bottom: 0;
+}
+.answer-section h3 {
+  margin: 0 0 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.answer-list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.answer-list li {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
+.answer-cite {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-left: 2px;
+}
+
+.answer-flag {
+  font-size: 13px;
+}
+
+.sources-list {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.sources-list h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+}
+.sources-list ol {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sources-list li {
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+.sources-list a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.sources-list a:hover {
+  text-decoration: underline;
+}
+
+.section-supertitle {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-muted);
+  margin: 0 0 14px;
+}
+
 .main-layout {
   display: grid;
   grid-template-columns: 1fr;
