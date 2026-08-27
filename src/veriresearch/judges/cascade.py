@@ -11,6 +11,8 @@ first demos.
 
 from __future__ import annotations
 
+import threading
+
 from ..state import VerificationLabel
 from . import JudgeBackend, JudgeRequest, JudgeVerdict
 from .heuristic import HeuristicJudge
@@ -21,19 +23,22 @@ class CascadeJudge:
         self.cheap = HeuristicJudge()
         self.escalate_below = escalate_below
         self._llm_judge = llm_judge  # lazily constructed on first escalation
+        self._llm_lock = threading.Lock()  # judge() runs concurrently from Verifier's thread pool
         self.samples = 1
         self.name = "cascade:heuristic+llm"
 
     def _llm(self) -> JudgeBackend:
         if self._llm_judge is None:
-            from ..config import SETTINGS
-            from ..llm import GrokClient
-            from .llm_judge import LLMJudge
+            with self._llm_lock:
+                if self._llm_judge is None:
+                    from ..config import SETTINGS
+                    from ..llm import GrokClient
+                    from .llm_judge import LLMJudge
 
-            self._llm_judge = LLMJudge(
-                client=GrokClient(model=SETTINGS.verifier.llm_model),
-                model=SETTINGS.verifier.llm_model,
-            )
+                    self._llm_judge = LLMJudge(
+                        client=GrokClient(model=SETTINGS.verifier.llm_model),
+                        model=SETTINGS.verifier.llm_model,
+                    )
         return self._llm_judge
 
     def judge(self, request: JudgeRequest) -> JudgeVerdict:

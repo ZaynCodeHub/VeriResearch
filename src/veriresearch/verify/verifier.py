@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
@@ -320,12 +321,40 @@ class Verifier:
         claims: Iterable[Claim],
         sources: dict[str, Source],
         attach: bool = True,
+        max_workers: int = 8,
     ) -> VerificationRun:
+        """Judge every (claim, source) pair concurrently, then aggregate per claim.
+
+        Each pair is an independent judge call (heuristic is instant; the LLM
+        judge is a network round-trip), so the only sequential cost here should
+        be the slowest single call, not the sum of all of them. Aggregation
+        itself stays single-threaded and order-independent — `aggregate()`
+        picks the strongest judgment per label, so the order judgments arrive
+        in doesn't matter.
+        """
         t0 = time.perf_counter()
         run = VerificationRun(backend=self.backend_name)
+        claims = list(claims)
+
+        pairs: list[tuple[Claim, Source]] = [
+            (claim, sources[sid])
+            for claim in claims
+            for sid in claim.source_ids
+            if sid in sources
+        ]
+
+        judgments_by_claim: dict[str, list[Judgment]] = {claim.id: [] for claim in claims}
+        if pairs:
+            with ThreadPoolExecutor(max_workers=max_workers) as pool:
+                future_to_claim_id = {
+                    pool.submit(self.verify_claim_against_source, claim, source): claim.id
+                    for claim, source in pairs
+                }
+                for future in as_completed(future_to_claim_id):
+                    judgments_by_claim[future_to_claim_id[future]].append(future.result())
 
         for claim in claims:
-            verification = self.verify_claim(claim, sources)
+            verification = self.aggregate(claim.id, judgments_by_claim[claim.id])
             run.verifications[claim.id] = verification
             run.claims_checked += 1
             run.judge_calls += len(verification.judgments)

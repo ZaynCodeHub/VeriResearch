@@ -12,6 +12,7 @@ that would corrupt the headline metric.
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Optional
 
 from ..config import SETTINGS
@@ -94,6 +95,21 @@ def _offline_source_for(sq: SubQuestion, corpus_entry: Optional[Source]) -> list
     ]
 
 
+def _research_sub_question(
+    sq: SubQuestion, live: bool, corpus_entry: Optional[Source]
+) -> tuple[SubQuestion, list[Source]]:
+    found: list[Source] = []
+    if live:
+        try:
+            found = _tavily_search(sq)
+        except Exception:
+            found = []
+    if not found:
+        found = _offline_source_for(sq, corpus_entry)
+    sq.status = "researched" if found else "failed"
+    return sq, found
+
+
 def researcher_node(state: RunState) -> dict[str, Any]:
     t0 = time.perf_counter()
     topic = state.get("topic", "")
@@ -104,19 +120,21 @@ def researcher_node(state: RunState) -> dict[str, Any]:
     new_sources: dict[str, Source] = {}
     updated_sub_questions: list[SubQuestion] = []
 
-    for sq in sub_questions:
-        found: list[Source] = []
-        if live:
-            try:
-                found = _tavily_search(sq)
-            except Exception:
-                found = []
-        if not found:
-            found = _offline_source_for(sq, corpus_entry)
+    # Each sub-question's search is an independent network call (Tavily) or
+    # local lookup — running them concurrently turns up-to-6 sequential
+    # round-trips into one wall-clock round-trip.
+    results: list[tuple[SubQuestion, list[Source]]]
+    if sub_questions:
+        with ThreadPoolExecutor(max_workers=min(8, len(sub_questions))) as pool:
+            results = list(
+                pool.map(lambda sq: _research_sub_question(sq, live, corpus_entry), sub_questions)
+            )
+    else:
+        results = []
 
+    for sq, found in results:
         for source in found:
             new_sources[source.id] = source
-        sq.status = "researched" if found else "failed"
         updated_sub_questions.append(sq)
 
     return {
